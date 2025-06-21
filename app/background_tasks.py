@@ -1,15 +1,16 @@
+import time
 from celery import Celery
 from typing import Dict, Any
 import asyncio
 import os
 from dotenv import load_dotenv
+from fastapi import BackgroundTasks
 
 from .services import openai_service
 from .models import ChatRequest
 
 load_dotenv()
 
-# Celery configuration
 celery_app = Celery(
     "chat_tasks",
     broker=os.getenv("REDIS_URL", "redis://localhost:6379/0"),
@@ -29,19 +30,14 @@ celery_app.conf.update(
 def process_long_chat_task(self, chat_data: Dict[str, Any], user_id: int):
     """
     Background task for processing long-running chat requests
-    This demonstrates Celery integration with async code
     """
     try:
-        # Update task status
         self.update_state(state="PROCESSING", meta={"progress": 0})
         
-        # Simulate some processing steps
-        import time
-        time.sleep(2)  # Simulate processing time
+        time.sleep(2)
         
         self.update_state(state="PROCESSING", meta={"progress": 50})
-        
-        # Process with OpenAI (we need to run async code in sync context)
+
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
         
@@ -73,29 +69,18 @@ def process_long_chat_task(self, chat_data: Dict[str, Any], user_id: int):
         )
         raise
 
-# FastAPI Background Tasks (alternative to Celery for simpler tasks)
-from fastapi import BackgroundTasks
-
 async def simple_background_task(
     user_id: int, 
     chat_data: Dict[str, Any],
     db_session_factory
 ):
     """
-    Simple background task using FastAPI's BackgroundTasks
-    Good for lightweight operations that don't need persistence
+    Simple background task using FastAPI BackgroundTasks
     """
     try:
-        # Simulate some background processing
         await asyncio.sleep(1)
         
-        # Log the completion (in real app, you might update database)
         print(f"Background task completed for user {user_id}")
-        
-        # You could update database here if needed
-        # async with db_session_factory() as db:
-        #     # Update task status in database
-        #     pass
             
     except Exception as e:
         print(f"Background task failed for user {user_id}: {str(e)}")
@@ -110,6 +95,6 @@ def add_simple_background_task(
         simple_background_task,
         user_id,
         chat_data,
-        None  # db_session_factory if needed
+        None
     )
 

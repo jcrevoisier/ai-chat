@@ -8,6 +8,8 @@ from typing import List
 import uvicorn
 import os
 from dotenv import load_dotenv
+from collections import defaultdict
+import time
 
 from .database import get_database, create_tables, User, Conversation, ChatTask
 from .models import (
@@ -34,7 +36,7 @@ app = FastAPI(
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure appropriately for production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -50,7 +52,6 @@ async def startup_event():
 async def register(user: UserCreate, db: AsyncSession = Depends(get_database)):
     """
     Register a new user
-    Demonstrates: Pydantic validation, password hashing, database operations
     """
     # Check if user already exists
     existing_user = await db.execute(
@@ -85,7 +86,6 @@ async def login(
 ):
     """
     Login and get JWT token
-    Demonstrates: JWT creation, authentication flow
     """
     user = await authenticate_user(db, username, password)
     if not user:
@@ -101,7 +101,6 @@ async def login(
     )
     return Token(access_token=access_token)
 
-# Chat endpoints
 @app.post("/chat", response_model=ChatResponse)
 async def chat_completion(
     request: ChatRequest,
@@ -110,7 +109,6 @@ async def chat_completion(
 ):
     """
     Create a chat completion using OpenAI
-    Demonstrates: OpenAI integration, async operations, error handling
     """
     messages = [{"role": "user", "content": request.message}]
     
@@ -121,8 +119,7 @@ async def chat_completion(
             max_tokens=request.max_tokens,
             temperature=request.temperature
         )
-        
-        # Save conversation to database
+
         conversation_data = {
             "user_id": current_user.id,
             "messages": [
@@ -148,15 +145,12 @@ async def chat_background_celery(
 ):
     """
     Process chat request in background using Celery
-    Demonstrates: Celery background tasks, task tracking
     """
-    # Create task in database
     task = process_long_chat_task.delay(
         request.model_dump(),
         current_user.id
     )
-    
-    # Store task info in database
+
     chat_task = ChatTask(
         id=task.id,
         user_id=current_user.id,
@@ -179,7 +173,6 @@ async def chat_background_simple(
 ):
     """
     Process chat request using FastAPI BackgroundTasks
-    Demonstrates: FastAPI background tasks (simpler alternative to Celery)
     """
     add_simple_background_task(
         background_tasks,
@@ -197,12 +190,9 @@ async def get_task_status(
 ):
     """
     Get background task status
-    Demonstrates: Task status tracking, Celery result backend
     """
-    # Get task from Celery
     task = celery_app.AsyncResult(task_id)
-    
-    # Get task from database
+
     db_task = await db.execute(
         select(ChatTask).where(
             (ChatTask.id == task_id) & (ChatTask.user_id == current_user.id)
@@ -212,8 +202,7 @@ async def get_task_status(
     
     if not db_task:
         raise HTTPException(status_code=404, detail="Task not found")
-    
-    # Map Celery states to our TaskStatus enum
+
     status_mapping = {
         "PENDING": TaskStatus.PENDING,
         "PROCESSING": TaskStatus.PROCESSING,
@@ -235,7 +224,6 @@ async def get_conversations(
 ):
     """
     Get user's conversation history
-    Demonstrates: Database queries, relationships, JSON handling
     """
     result = await db.execute(
         select(Conversation).where(Conversation.user_id == current_user.id)
@@ -260,7 +248,6 @@ async def chat_huggingface(
 ):
     """
     Alternative AI service using HuggingFace
-    Demonstrates: Multiple AI service integrations, httpx usage
     """
     try:
         result = await huggingface_service.generate_text(prompt, model)
@@ -268,7 +255,6 @@ async def chat_huggingface(
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-# Health check endpoint
 @app.get("/health")
 async def health_check():
     """Simple health check endpoint"""
@@ -277,10 +263,6 @@ async def health_check():
         "timestamp": datetime.utcnow().isoformat(),
         "version": "1.0.0"
     }
-
-# Rate limiting example (basic implementation)
-from collections import defaultdict
-import time
 
 request_counts = defaultdict(list)
 
@@ -292,27 +274,16 @@ async def rate_limit_middleware(request, call_next):
     """
     client_ip = request.client.host
     current_time = time.time()
-    
-    # Clean old requests (older than 1 minute)
+
     request_counts[client_ip] = [
         req_time for req_time in request_counts[client_ip]
         if current_time - req_time < 60
     ]
-    
-    # Check rate limit (100 requests per minute)
+
     if len(request_counts[client_ip]) >= 100:
         return HTTPException(status_code=429, detail="Rate limit exceeded")
-    
-    # Add current request
+
     request_counts[client_ip].append(current_time)
     
     response = await call_next(request)
     return response
-
-if __name__ == "__main__":
-    uvicorn.run(
-        "app.main:app",
-        host="0.0.0.0",
-        port=8000,
-        reload=True
-    )

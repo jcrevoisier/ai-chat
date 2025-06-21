@@ -26,7 +26,6 @@ class OpenAIService:
     ) -> ChatResponse:
         """
         Create a chat completion using OpenAI API
-        Demonstrates async API calls and error handling
         """
         try:
             response = await self.client.chat.completions.create(
@@ -72,9 +71,6 @@ class HuggingFaceService:
         prompt: str, 
         model: str = "microsoft/DialoGPT-medium"
     ) -> Dict[str, Any]:
-        """
-        Alternative AI service using HuggingFace Inference API
-        """
         url = f"{self.api_url}/{model}"
         
         async with httpx.AsyncClient() as client:
@@ -99,6 +95,5 @@ class HuggingFaceService:
                     detail=f"HuggingFace API error: {e.response.text}"
                 )
 
-# Service instances
 openai_service = OpenAIService()
 huggingface_service = HuggingFaceService()

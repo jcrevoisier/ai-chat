@@ -5,7 +5,7 @@ from enum import Enum
 
 class UserCreate(BaseModel):
     username: str = Field(..., min_length=3, max_length=50)
-    email: str = Field(..., pattern=r'^[\w\.-]+@[\w\.-]+\.\w+$')  # Changed from regex to pattern
+    email: str = Field(..., pattern=r'^[\w\.-]+@[\w\.-]+\.\w+$')
     password: str = Field(..., min_length=8)
 
 class UserResponse(BaseModel):
